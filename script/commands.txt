@@ -2,22 +2,75 @@
 // display stations coordinates
 db.stations.find({},{longitude:1, latitude:1})
 
-// update stations elements to add loc field from longitude et latitude
-db.stations.find().forEach(function f(e) {db.stations.update({_id: e._id}, {$set: {loc:[e.longitude, e.latitude]}}) })
+// update stations elements to add loc field from longitude et latitude and dept extracted from address
+db.stations.find().forEach(
+        function f(e) {
+                // extract dept number
+                var regex=/.*([0-9]{5}).*/; 
+                var match = regex.exec(e.address);
+
+                db.stations.update(
+                        {_id: e._id}, 
+                        {$set:  {
+                                loc: [e.longitude, e.latitude],
+                                dept: match[1]
+                                }
+                        }
+                );
+        }
+)
+
 
 // create index for loc field
 db.stations.ensureIndex({"loc": "2d"})
 
-// find station 0.01 unit away from home
+// ----------------------------------------------------------------------------
+// requests to find stations near to home
+// ----------------------------------------------------------------------------
+// find stations 0.01 unit away from home
 db.stations.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}})
 db.stations.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}}, {name:1})
 
-//
+// idem that previous request but also display distance
 db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01})
 db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.forEach(function(e) {print(e.dis + " - " + e.obj.name)})
-
 db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.sort(function(l,r) {return l.dis-r.dis}).forEach(function(e) {print(e.dis + " - " + e.obj.name + " - " + e.obj.address)})
 
+// idem that previous request but use aggregate function
 db.stations.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}])
 db.stations.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}]).forEach(function(e) {print(e.dist + " - " + e.name + " - " + e.address)})
+
+
+// ----------------------------------------------------------------------------
+// requests to group stations by departement
+// ----------------------------------------------------------------------------
+// use group function
+db.stations.group({ 
+        key: {dept:1}, 
+        reduce: function f(curr, res) {res.count += 1}, 
+        initial: {count: 0} 
+}).sort(function f(l,r) {
+        return l.count - r.count
+}).forEach(
+        function f(e) {
+                print(e.dept + " - " + e.count)
+        }
+)
+
+// use aggregate pipeline with group + sort
+db.stations.aggregate([
+        {
+                $group: {
+                        _id: "$dept",
+                        count: { $sum: 1 }
+                }
+        },
+        {
+                $sort: {count: 1}
+        }
+]).forEach(
+        function f(e) {
+                print(e._id + " - " + e.count)
+        }
+)
 
