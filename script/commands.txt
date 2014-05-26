@@ -1,0 +1,23 @@
+
+// display stations coordinates
+db.stations.find({},{longitude:1, latitude:1})
+
+// update stations elements to add loc field from longitude et latitude
+db.stations.find().forEach(function f(e) {db.stations.update({_id: e._id}, {$set: {loc:[e.longitude, e.latitude]}}) })
+
+// create index for loc field
+db.stations.ensureIndex({"loc": "2d"})
+
+// find station 0.01 unit away from home
+db.stations.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}})
+db.stations.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}}, {name:1})
+
+//
+db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01})
+db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.forEach(function(e) {print(e.dis + " - " + e.obj.name)})
+
+db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.sort(function(l,r) {return l.dis-r.dis}).forEach(function(e) {print(e.dis + " - " + e.obj.name + " - " + e.obj.address)})
+
+db.stations.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}])
+db.stations.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}]).forEach(function(e) {print(e.dist + " - " + e.name + " - " + e.address)})
+
