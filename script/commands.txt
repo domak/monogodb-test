@@ -1,19 +1,35 @@
 
-// display stations coordinates
-db.stations.find({},{longitude:1, latitude:1})
+// display velib coordinates
+db.velib.find({},{longitude:1, latitude:1})
 
-// update stations elements to add loc field from longitude et latitude and dept extracted from address
-db.stations.find().forEach(
+// use nummber field as id
+db.velib.find().forEach(
+        function(e) { 
+                var id = e._id; 
+                e._id = e.number;
+                db.velib.insert(e); 
+                db.velib.remove({_id: id}); 
+        }
+)
+
+// update velib elements to add loc field from longitude et latitude and dept extracted from address
+db.velib.find().forEach(
         function f(e) {
                 // extract dept number
                 var regex=/.*([0-9]{5}).*/; 
                 var match = regex.exec(e.address);
 
-                db.stations.update(
+                db.velib.update(
                         {_id: e._id}, 
-                        {$set:  {
+                        {
+                        $set:  {
                                 loc: [e.longitude, e.latitude],
                                 dept: match[1]
+                                },
+                        $unset: {
+                                number: "",
+                                longitude: "",
+                                latitude: ""
                                 }
                         }
                 );
@@ -22,30 +38,30 @@ db.stations.find().forEach(
 
 
 // create index for loc field
-db.stations.ensureIndex({"loc": "2d"})
+db.velib.ensureIndex({"loc": "2d"})
 
 // ----------------------------------------------------------------------------
-// requests to find stations near to home
+// requests to find velib near to home
 // ----------------------------------------------------------------------------
-// find stations 0.01 unit away from home
-db.stations.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}})
-db.stations.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}}, {name:1})
+// find velib 0.01 unit away from home
+db.velib.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}})
+db.velib.find({loc: {$near: [2.4003772, 48.8416919 ], $maxDistance : 0.01}}, {name:1})
 
 // idem that previous request but also display distance
-db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01})
-db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.forEach(function(e) {print(e.dis + " - " + e.obj.name)})
-db.runCommand({geoNear: "stations", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.sort(function(l,r) {return l.dis-r.dis}).forEach(function(e) {print(e.dis + " - " + e.obj.name + " - " + e.obj.address)})
+db.runCommand({geoNear: "velib", near: [2.4003772, 48.8416919 ], maxDistance: 0.01})
+db.runCommand({geoNear: "velib", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.forEach(function(e) {print(e.dis + " - " + e.obj.name)})
+db.runCommand({geoNear: "velib", near: [2.4003772, 48.8416919 ], maxDistance: 0.01}).results.sort(function(l,r) {return l.dis-r.dis}).forEach(function(e) {print(e.dis + " - " + e.obj.name + " - " + e.obj.address)})
 
 // idem that previous request but use aggregate function
-db.stations.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}])
-db.stations.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}]).forEach(function(e) {print(e.dist + " - " + e.name + " - " + e.address)})
+db.velib.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}])
+db.velib.aggregate([{$geoNear: {near: [2.4003772, 48.8416919], distanceField: "dist", maxDistance: 0.01 }}]).forEach(function(e) {print(e.dist + " - " + e.name + " - " + e.address)})
 
 
 // ----------------------------------------------------------------------------
-// requests to group stations by departement
+// requests to group velib by departement
 // ----------------------------------------------------------------------------
 // use group function
-db.stations.group({ 
+db.velib.group({ 
         key: {dept:1}, 
         reduce: function f(curr, res) {res.count += 1}, 
         initial: {count: 0} 
@@ -58,7 +74,7 @@ db.stations.group({
 )
 
 // use aggregate pipeline with group + sort
-db.stations.aggregate([
+db.velib.aggregate([
         {
                 $group: {
                         _id: "$dept",
@@ -73,4 +89,20 @@ db.stations.aggregate([
                 print(e._id + " - " + e.count)
         }
 )
+
+
+// ----------------------------------------------------------------------------
+// count the occurences of same value; filter to keep only ones greater that 2; sum the result; display the result as a json object (without _id)
+// ----------------------------------------------------------------------------
+
+{ "_id" : ObjectId("50778ce69331a280cf4bcfc0"), "value" : 2 }
+{ "_id" : ObjectId("50778ce69331a280cf4bcfc1"), "value" : 22 }
+{ "_id" : ObjectId("50778ce69331a280cf4bcfc2"), "value" : 22 }
+{ "_id" : ObjectId("50778ce69331a280cf4bcfc3"), "value" : 74 }
+{ "_id" : ObjectId("50778ce69331a280cf4bcfc4"), "value" : 57 }
+{ "_id" : ObjectId("50778ce69331a280cf4bcfc5"), "value" : 78 }
+...
+
+> db.funnynumbers.aggregate([{$group: {_id: "$value", count: {$sum:1}}}, {$match: {count: {$gt:2}}}, {$group: {_id: "", result: {$sum: "$_id"}}}, {$project: {_id: 0, result: 1}}])
+{ "result" : 366 }
 
